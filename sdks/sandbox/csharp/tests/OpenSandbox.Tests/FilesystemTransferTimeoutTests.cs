@@ -14,6 +14,7 @@
 
 using System.Diagnostics;
 using System.Globalization;
+using System.IO.Compression;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Sockets;
@@ -39,6 +40,58 @@ public class FilesystemTransferTimeoutTests
 {
     private const int RequestTimeoutSeconds = 1;
     private static readonly TimeSpan ResponseBound = TimeSpan.FromSeconds(5);
+
+    [Theory]
+    [InlineData("gzip", false)]
+    [InlineData("gzip", true)]
+    [InlineData("deflate", false)]
+    [InlineData("deflate", true)]
+    public async Task ContentEncodedRangeDownloadHasUnknownTotalSize(string encoding, bool streaming)
+    {
+        var data = Encoding.UTF8.GetBytes(new string('a', 6000));
+        using var compressed = new MemoryStream();
+        using (Stream compressor = encoding == "gzip"
+                   ? new GZipStream(compressed, CompressionLevel.Optimal, leaveOpen: true)
+                   : new ZLibStream(compressed, CompressionLevel.Optimal, leaveOpen: true))
+        {
+            await compressor.WriteAsync(data);
+        }
+        var encoded = compressed.ToArray();
+        var range = FormattableString.Invariant($"bytes 0-{encoded.Length - 1}/{encoded.Length}");
+
+        await using var server = new LoopbackHttpServer();
+        server.OnRequest(async (stream, _, _) =>
+        {
+            var headers = Encoding.ASCII.GetBytes(
+                $"HTTP/1.1 206 Partial Content\r\nContent-Encoding: {encoding}\r\n" +
+                $"Content-Length: {encoded.Length}\r\nContent-Range: {range}\r\nConnection: close\r\n\r\n");
+            await stream.WriteAsync(headers);
+            await stream.WriteAsync(encoded);
+        });
+        var serving = server.ServeAsync();
+        var (files, provider) = CreateFiles(server.Port);
+        using var _ = provider;
+        var options = new ReadBytesOptions { Range = $"bytes=0-{encoded.Length - 1}" };
+
+        if (streaming)
+        {
+            var response = await files.ReadBytesStreamDetailedAsync("/data.bin", options);
+            await using var body = response.Body;
+            using var output = new MemoryStream();
+            await foreach (var chunk in body) await output.WriteAsync(chunk);
+            output.ToArray().Should().Equal(data);
+            response.ContentRange.Should().Be(new ByteRange(0, encoded.Length - 1, encoded.Length, range));
+            response.TotalSize.Should().Be(-1);
+        }
+        else
+        {
+            var response = await files.ReadBytesDetailedAsync("/data.bin", options);
+            response.Body.Should().Equal(data);
+            response.ContentRange.Should().Be(new ByteRange(0, encoded.Length - 1, encoded.Length, range));
+            response.TotalSize.Should().Be(-1);
+        }
+        await serving;
+    }
 
     [Fact]
     public async Task UploadOutlivingRequestTimeoutCompletes()

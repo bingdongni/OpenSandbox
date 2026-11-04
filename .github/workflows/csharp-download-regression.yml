@@ -1,0 +1,18 @@
+name: C# download regression
+
+on: [push]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+      - name: Test encoded range downloads
+        working-directory: sdks/sandbox/csharp
+        run: dotnet test tests/OpenSandbox.Tests/OpenSandbox.Tests.csproj --configuration Release --filter FullyQualifiedName~ContentEncodedRangeDownloadHasUnknownTotalSize
