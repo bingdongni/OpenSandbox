@@ -78,7 +78,10 @@ public class FilesystemTransferTimeoutTests
             var response = await files.ReadBytesStreamDetailedAsync("/data.bin", options);
             await using var body = response.Body;
             using var output = new MemoryStream();
-            await foreach (var chunk in body) await output.WriteAsync(chunk);
+            await foreach (var chunk in body)
+            {
+                await output.WriteAsync(chunk);
+            }
             output.ToArray().Should().Equal(data);
             response.ContentRange.Should().Be(new ByteRange(0, encoded.Length - 1, encoded.Length, range));
             response.TotalSize.Should().Be(-1);
@@ -115,7 +118,10 @@ public class FilesystemTransferTimeoutTests
         var download = await files.ReadBytesStreamDetailedAsync("/data.bin", new ReadBytesOptions { Range = "bytes=0-4" });
         await using var body = download.Body;
         using var output = new MemoryStream();
-        await foreach (var chunk in body) await output.WriteAsync(chunk);
+        await foreach (var chunk in body)
+        {
+            await output.WriteAsync(chunk);
+        }
         output.ToArray().Should().Equal(Encoding.UTF8.GetBytes("hello"));
         download.ContentLength.Should().Be(-1);
         download.ContentRange.Should().Be(new ByteRange(0, 4, 10, "bytes 0-4/10"));
