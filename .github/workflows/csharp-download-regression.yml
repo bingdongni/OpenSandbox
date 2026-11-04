@@ -1,0 +1,24 @@
+name: C# download regression
+
+on: [push]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+      - name: Build with analyzers
+        working-directory: sdks/sandbox/csharp
+        run: dotnet build OpenSandbox.sln --configuration Release /warnaserror
+      - name: Test sandbox SDK
+        working-directory: sdks/sandbox/csharp
+        run: dotnet test tests/OpenSandbox.Tests/OpenSandbox.Tests.csproj --configuration Release --no-build
+      - name: Test netstandard compatibility
+        working-directory: sdks/sandbox/csharp
+        run: dotnet test tests/OpenSandbox.NetStandardCompat.Tests/OpenSandbox.NetStandardCompat.Tests.csproj --configuration Release --no-build
