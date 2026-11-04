@@ -17,6 +17,9 @@ jobs:
       - name: Install dependencies
         working-directory: sdks/sandbox/python
         run: uv sync --frozen
+      - name: Generate API
+        working-directory: sdks/sandbox/python
+        run: uv run python scripts/generate_api.py
       - name: Lint and typecheck
         working-directory: sdks/sandbox/python
         run: |
@@ -32,7 +35,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
         with:
-          node-version: '22'
+          node-version: '20'
       - name: Enable pnpm
         run: |
           corepack enable
