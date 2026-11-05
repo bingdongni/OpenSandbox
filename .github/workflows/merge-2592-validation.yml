@@ -1,0 +1,70 @@
+name: Download SDK regression
+
+on:
+  push:
+    branches: ['ci/opensandbox-2592-merge-20261105']
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - uses: astral-sh/setup-uv@v7
+      - name: Install dependencies
+        working-directory: sdks/sandbox/python
+        run: uv sync --frozen
+      - name: Generate API
+        working-directory: sdks/sandbox/python
+        run: uv run python scripts/generate_api.py
+      - name: Lint and typecheck
+        working-directory: sdks/sandbox/python
+        run: |
+          uv run ruff check
+          uv run pyright
+      - name: Test
+        working-directory: sdks/sandbox/python
+        run: uv run pytest tests/ -q
+
+  javascript:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+      - name: Enable pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@9.15.0 --activate
+      - name: Install dependencies
+        working-directory: sdks
+        run: pnpm install --frozen-lockfile
+      - name: Lint, typecheck, and test
+        working-directory: sdks/sandbox/javascript
+        run: |
+          pnpm lint
+          pnpm typecheck
+          pnpm test
+
+  csharp:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+      - name: Build with analyzers
+        working-directory: sdks/sandbox/csharp
+        run: dotnet build OpenSandbox.sln --configuration Release /warnaserror
+      - name: Test sandbox SDK
+        working-directory: sdks/sandbox/csharp
+        run: dotnet test tests/OpenSandbox.Tests/OpenSandbox.Tests.csproj --configuration Release --no-build
+      - name: Test netstandard compatibility
+        working-directory: sdks/sandbox/csharp
+        run: dotnet test tests/OpenSandbox.NetStandardCompat.Tests/OpenSandbox.NetStandardCompat.Tests.csproj --configuration Release --no-build
